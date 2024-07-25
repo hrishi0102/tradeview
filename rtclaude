@@ -1,0 +1,82 @@
+import { createChart, ColorType } from "lightweight-charts";
+import React, { useEffect, useRef, useState } from "react";
+
+const API_KEY = "DzY4vaaeCgtt9wLVrinjT2WeqGZmh93r";
+const API_URL = `https://api.polygon.io/v2/aggs/ticker/AAPL/range/1/day/2023-01-09/2023-02-10?adjusted=true&sort=asc&apiKey=${API_KEY}`;
+
+const App = () => {
+  const chartContainerRef = useRef();
+  const chartRef = useRef(null);
+  const seriesRef = useRef(null);
+  const [data, setData] = useState([]);
+
+  const fetchData = async () => {
+    try {
+      const response = await fetch(API_URL);
+      const result = await response.json();
+      
+      if (result.results) {
+        const newData = result.results.map(item => ({
+          time: item.t / 1000, // Convert milliseconds to seconds
+          open: item.o,
+          high: item.h,
+          low: item.l,
+          close: item.c
+        }));
+        
+        setData(prevData => {
+          const combinedData = [...prevData, ...newData];
+          // Remove duplicates based on the 'time' property
+          return Array.from(new Map(combinedData.map(item => [item.time, item])).values());
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchData(); // Initial fetch
+
+    const intervalId = setInterval(fetchData, 5 * 60 * 1000); // Fetch every 5 minutes
+
+    return () => clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
+    if (!chartRef.current) {
+      chartRef.current = createChart(chartContainerRef.current, {
+        layout: {
+          background: { type: ColorType.Solid, color: "white" },
+        },
+        width: 700,
+        height: 200,
+      });
+
+      seriesRef.current = chartRef.current.addCandlestickSeries({
+        upColor: "#26a69a",
+        downColor: "#ef5350",
+        borderVisible: false,
+        wickUpColor: "#26a69a",
+        wickDownColor: "#ef5350",
+      });
+    }
+
+    if (data.length > 0) {
+      seriesRef.current.setData(data);
+      chartRef.current.timeScale().fitContent();
+    }
+
+    return () => {
+      if (chartRef.current) {
+        chartRef.current.remove();
+        chartRef.current = null;
+        seriesRef.current = null;
+      }
+    };
+  }, [data]);
+
+  return <div ref={chartContainerRef}></div>;
+};
+
+export default App;
